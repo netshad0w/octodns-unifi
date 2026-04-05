@@ -50,6 +50,13 @@ providers:
     # console_id: "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX:123456"
     # Default TTL in seconds (optional, defaults to 300)
     default_ttl: 300
+    # Zone list for dynamic zone config (optional)
+    # If omitted, zones are auto-detected from existing records assuming
+    # two-label zones (e.g. example.com). Use explicit zones for multi-label
+    # TLDs like co.uk or com.au.
+    # zones:
+    #   - example.com.
+    #   - internal.example.
 ```
 
 #### Cloud access

@@ -1024,3 +1024,152 @@ class TestUnifiProvider(TestCase):
         provider._apply_Delete(change)
 
         provider._client.record_delete.assert_not_called()
+
+    def test_list_zones_configured(self):
+        provider = UnifiProvider(
+            'test',
+            'unifi.local',
+            'test-api-key',
+            zones=['other.net.', 'example.com.'],
+        )
+        provider._client = MagicMock()
+
+        result = provider.list_zones()
+
+        self.assertEqual(['example.com.', 'other.net.'], result)
+        provider._client.records.assert_not_called()
+
+    def test_list_zones_configured_no_trailing_dot(self):
+        provider = UnifiProvider(
+            'test',
+            'unifi.local',
+            'test-api-key',
+            zones=['other.net', 'example.com.'],
+        )
+        provider._client = MagicMock()
+
+        result = provider.list_zones()
+
+        self.assertEqual(['example.com.', 'other.net.'], result)
+        provider._client.records.assert_not_called()
+
+    def test_list_zones_configured_empty(self):
+        provider = UnifiProvider(
+            'test', 'unifi.local', 'test-api-key', zones=[]
+        )
+        provider._client = MagicMock()
+
+        result = provider.list_zones()
+
+        self.assertEqual([], result)
+        provider._client.records.assert_not_called()
+
+    def test_list_zones_auto_extract(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {'type': 'A_RECORD', 'domain': 'www.example.com'},
+            {'type': 'A_RECORD', 'domain': 'mail.example.com'},
+            {'type': 'A_RECORD', 'domain': 'host.other.net'},
+            {'type': 'A_RECORD', 'domain': 'sub.deep.other.net'},
+        ]
+
+        result = provider.list_zones()
+
+        self.assertEqual(['example.com.', 'other.net.'], result)
+
+    def test_list_zones_empty(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = []
+
+        result = provider.list_zones()
+
+        self.assertEqual([], result)
+
+    def test_list_zones_none_response(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = None
+
+        result = provider.list_zones()
+
+        self.assertEqual([], result)
+
+    def test_list_zones_apex_record(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {'type': 'A_RECORD', 'domain': 'example.com'}
+        ]
+
+        result = provider.list_zones()
+
+        self.assertEqual(['example.com.'], result)
+
+    def test_list_zones_single_label(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {'type': 'A_RECORD', 'domain': 'localhost'},
+            {'type': 'A_RECORD', 'domain': 'www.example.com'},
+        ]
+
+        result = provider.list_zones()
+
+        self.assertEqual(['example.com.'], result)
+
+    def test_list_zones_wildcard(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {'type': 'A_RECORD', 'domain': '*.dev.example.org'},
+            {'type': 'A_RECORD', 'domain': '*.staging.example.org'},
+            {'type': 'A_RECORD', 'domain': 'www.example.org'},
+        ]
+
+        result = provider.list_zones()
+
+        self.assertEqual(['example.org.'], result)
+
+    def test_list_zones_caches_records_for_populate(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-1',
+                'domain': 'www.example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '1.2.3.4',
+            }
+        ]
+
+        provider.list_zones()
+
+        zone = self._get_zone()
+        provider.populate(zone)
+
+        provider._client.records.assert_called_once()
+
+    def test_list_zones_cache_consumed_after_first_populate(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-1',
+                'domain': 'www.example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '1.2.3.4',
+            },
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-2',
+                'domain': 'host.other.net',
+                'ttlSeconds': 300,
+                'ipv4Address': '5.6.7.8',
+            },
+        ]
+
+        provider.list_zones()
+
+        zone1 = self._get_zone()
+        provider.populate(zone1)
+
+        zone2 = Zone('other.net.', [])
+        provider.populate(zone2)
+
+        self.assertEqual(2, provider._client.records.call_count)

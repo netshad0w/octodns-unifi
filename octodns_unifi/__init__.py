@@ -133,6 +133,7 @@ class UnifiProvider(BaseProvider):
         verify_ssl=True,
         console_id=None,
         default_ttl=300,
+        zones=None,
         *args,
         **kwargs,
     ):
@@ -147,10 +148,28 @@ class UnifiProvider(BaseProvider):
             console_id=console_id,
         )
         self._default_ttl = default_ttl
+        self._zones = zones
+        self._all_records = None
         self._zone_records = {}
 
+    def list_zones(self):
+        self.log.debug('list_zones:')
+        if self._zones is not None:
+            return sorted(
+                {z if z.endswith('.') else f'{z}.' for z in self._zones}
+            )
+        self._all_records = self._client.records() or []
+        zones = set()
+        for record in self._all_records:
+            domain = record.get('domain', '')
+            domain = domain.removeprefix('*.')
+            parts = domain.split('.')
+            if len(parts) >= 2:
+                zones.add(f'{".".join(parts[-2:])}.')
+        return sorted(zones)
+
     def _zone_name_sans_dot(self, zone):
-        return zone.name.rstrip('.')
+        return zone.name.removesuffix('.')
 
     def _record_name(self, domain, zone_name):
         if domain == zone_name:
@@ -233,7 +252,13 @@ class UnifiProvider(BaseProvider):
         )
 
         zone_name = self._zone_name_sans_dot(zone)
-        raw_records = self._client.records() or []
+        # Reuse records fetched by list_zones() on the first populate()
+        # call, subsequent calls fetch fresh data from the API
+        if self._all_records is not None:
+            raw_records = self._all_records
+            self._all_records = None
+        else:
+            raw_records = self._client.records() or []
         self._zone_records[zone.name] = raw_records
 
         grouped = defaultdict(lambda: defaultdict(list))
@@ -293,13 +318,13 @@ class UnifiProvider(BaseProvider):
 
     def _params_for_CNAME(self, record):
         params = self._params_for_base(record, 'CNAME_RECORD')
-        params['targetDomain'] = record.value.rstrip('.')
+        params['targetDomain'] = record.value.removesuffix('.')
         yield params
 
     def _params_for_MX(self, record):
         for value in record.values:
             params = self._params_for_base(record, 'MX_RECORD')
-            params['mailServerDomain'] = value.exchange.rstrip('.')
+            params['mailServerDomain'] = value.exchange.removesuffix('.')
             params['priority'] = value.preference
             yield params
 
@@ -312,7 +337,7 @@ class UnifiProvider(BaseProvider):
     def _params_for_SRV(self, record):
         for value in record.values:
             params = self._params_for_base(record, 'SRV_RECORD')
-            params['serverDomain'] = value.target.rstrip('.')
+            params['serverDomain'] = value.target.removesuffix('.')
             params['priority'] = value.priority
             params['weight'] = value.weight
             params['port'] = value.port
