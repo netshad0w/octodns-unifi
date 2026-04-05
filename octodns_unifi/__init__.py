@@ -266,3 +266,99 @@ class UnifiProvider(BaseProvider):
             exists,
         )
         return exists
+
+    def _params_for_base(self, record, unifi_type):
+        zone_name = self._zone_name_sans_dot(record.zone)
+        if record.name:
+            domain = f'{record.name}.{zone_name}'
+        else:
+            domain = zone_name
+        return {
+            'type': unifi_type,
+            'enabled': True,
+            'domain': domain,
+            'ttlSeconds': record.ttl,
+        }
+
+    def _params_for_A(self, record):
+        for value in record.values:
+            params = self._params_for_base(record, 'A_RECORD')
+            params['ipv4Address'] = value
+            yield params
+
+    def _params_for_AAAA(self, record):
+        for value in record.values:
+            params = self._params_for_base(record, 'AAAA_RECORD')
+            params['ipv6Address'] = value
+            yield params
+
+    def _params_for_CNAME(self, record):
+        params = self._params_for_base(record, 'CNAME_RECORD')
+        params['targetDomain'] = record.value.rstrip('.')
+        yield params
+
+    def _params_for_MX(self, record):
+        for value in record.values:
+            params = self._params_for_base(record, 'MX_RECORD')
+            params['mailServerDomain'] = value.exchange.rstrip('.')
+            params['priority'] = value.preference
+            yield params
+
+    def _params_for_TXT(self, record):
+        for value in record.values:
+            params = self._params_for_base(record, 'TXT_RECORD')
+            params['text'] = value
+            yield params
+
+    def _params_for_SRV(self, record):
+        for value in record.values:
+            params = self._params_for_base(record, 'SRV_RECORD')
+            params['serverDomain'] = value.target.rstrip('.')
+            params['priority'] = value.priority
+            params['weight'] = value.weight
+            params['port'] = value.port
+            yield params
+
+    def _params_for(self, record):
+        handler = getattr(self, f'_params_for_{record._type}')
+        return handler(record)
+
+    def _record_matches(self, api_record, octodns_record):
+        zone_name = self._zone_name_sans_dot(octodns_record.zone)
+        octodns_type = self._record_type(api_record.get('type', ''))
+        if octodns_type != octodns_record._type:
+            return False
+        name = self._record_name(api_record.get('domain', ''), zone_name)
+        return name == octodns_record.name
+
+    def _apply_Create(self, change):
+        new = change.new
+        for params in self._params_for(new):
+            self._client.record_create(params)
+
+    def _apply_Update(self, change):
+        self._apply_Delete(change)
+        self._apply_Create(change)
+
+    def _apply_Delete(self, change):
+        existing = change.existing
+        for record in self._zone_records.get(existing.zone.name, []):
+            if self._record_matches(record, existing):
+                record_id = record.get('id')
+                if record_id is None:
+                    self.log.warning(
+                        '_apply_Delete: record missing id, skipping'
+                    )
+                    continue
+                self._client.record_delete(record_id)
+
+    def _apply(self, plan):
+        desired = plan.desired
+        changes = plan.changes
+        self.log.info(
+            '_apply: zone=%s, len(changes)=%d', desired.name, len(changes)
+        )
+        for change in changes:
+            class_name = change.__class__.__name__
+            getattr(self, f'_apply_{class_name}')(change)
+        self._zone_records.pop(desired.name, None)
