@@ -1,3 +1,8 @@
+## 1.1.0 - 2026-04-05
+
+Minor:
+* Add list_zones for dynamic zone configuration with optional explicit zone list
+
 ## 1.0.0 - 2026-04-05
 
 Minor:

@@ -8,7 +8,7 @@ from requests.exceptions import RequestException
 from octodns.provider.base import BaseProvider
 from octodns.record import Record
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 
 
 class UnifiClientException(Exception):
