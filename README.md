@@ -27,7 +27,7 @@ octodns-unifi==1.1.1
 ```
 # Start with the latest/specific versions and don't just copy what's here
 -e git+https://git@github.com/octodns/octodns.git@9da19749e28f68407a1c246dfdf65663cdc1c422#egg=octodns
--e git+https://git@github.com/netshad0w/octodns-unifi.git@ec9661f8b335241ae4746eea467a8509205e6a30#egg=octodns_unifi
+-e git+https://git@github.com/netshad0w/octodns-unifi.git@c87a2265d85cc4bed1df290397ca7d3148f18b1e#egg=octodns_unifi
 ```
 
 ### Configuration
@@ -44,7 +44,8 @@ providers:
     api_key: env/UNIFI_API_KEY
     # Site name (optional, defaults to 'default')
     site: default
-    # Disable SSL verification for self-signed certs (optional, defaults to true)
+    # Disable SSL verification (optional, defaults to true)
+    # Set to false when using self-signed certificates on a local controller
     verify_ssl: true
     # For cloud access via api.ui.com, provide your console ID (optional)
     # console_id: "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX:123456"
@@ -61,7 +62,9 @@ providers:
 
 #### Cloud access
 
-To manage DNS via the Ubiquiti cloud API instead of connecting directly to the controller, set `console_id` to your console's ID (found in the URL at unifi.ui.com):
+To manage DNS via the Ubiquiti cloud API instead of connecting directly to the controller, set `console_id` to your console's ID. You can find it in the URL when logged into [unifi.ui.com](https://unifi.ui.com) (e.g. `https://unifi.ui.com/consoles/<console_id>/...`).
+
+Note: `host` is still a required parameter but will be ignored when `console_id` is set.
 
 ```yaml
 providers:
@@ -69,6 +72,8 @@ providers:
     class: octodns_unifi.UnifiProvider
     host: unused
     api_key: env/UNIFI_API_KEY
+    # Site name (optional, defaults to 'default')
+    site: default
     console_id: env/UNIFI_CONSOLE_ID
 ```
 
@@ -86,6 +91,11 @@ The following record types are supported:
 | MX     | Yes     |
 | TXT    | Yes     |
 | SRV    | Yes     |
+
+#### Limitations
+
+- **TTL**: The UniFi API only supports custom TTL values for A, AAAA, and CNAME records. For MX, TXT, and SRV records, the TTL is managed by the controller and any value set in octodns will be ignored.
+- **Zone auto-detection**: Zones are inferred from the last two labels of each record's domain (e.g. `example.com`). For multi-label TLDs like `co.uk` or `com.au`, you must configure `zones` explicitly in the provider config.
 
 #### Dynamic
 
