@@ -1,3 +1,8 @@
+## 1.1.2 - 2026-04-06
+
+Patch:
+* Clarify README with API limitations, cloud access details, and updated SHA
+
 ## 1.1.1 - 2026-04-06
 
 Patch:
