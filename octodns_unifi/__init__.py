@@ -125,7 +125,7 @@ _OCTODNS_TYPE_MAP = {v: k for k, v in _UNIFI_TYPE_MAP.items()}
 class UnifiProvider(BaseProvider):
     SUPPORTS_GEO = False
     SUPPORTS_DYNAMIC = False
-    SUPPORTS = set(('A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV'))
+    SUPPORTS = {'A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV'}
 
     def __init__(
         self,
@@ -167,6 +167,9 @@ class UnifiProvider(BaseProvider):
             domain = record.get('domain', '')
             domain = domain.removeprefix('*.')
             parts = domain.split('.')
+            # Extract the zone as the last two labels; does not support
+            # country-code SLDs like co.uk — use explicit zones config
+            # for those.
             if len(parts) >= 2:
                 zones.add(f'{".".join(parts[-2:])}.')
         return sorted(zones)
