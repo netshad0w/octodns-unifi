@@ -997,10 +997,15 @@ class TestUnifiProvider(TestCase):
             'Connection refused'
         )
 
-        client = UnifiClient('unifi.local', 'key')
+        secret = 'my-secret-api-key-value'
+        client = UnifiClient('unifi.local', secret)
 
-        with self.assertRaises(UnifiClientException):
+        with self.assertRaises(UnifiClientException) as ctx:
             client._request('GET', '/some/path')
+
+        msg = str(ctx.exception)
+        self.assertIn('ConnectionError', msg)
+        self.assertNotIn(secret, msg)
 
     def test_apply_delete_skips_missing_id(self):
         provider = self._get_provider()

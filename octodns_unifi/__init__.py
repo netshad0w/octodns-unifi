@@ -36,6 +36,9 @@ class UnifiClient:
         sess.verify = verify_ssl
         if not verify_ssl:
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            self.log.warning(
+                '__init__: SSL certificate verification is disabled'
+            )
         self._sess = sess
 
         if console_id:
@@ -79,7 +82,7 @@ class UnifiClient:
             resp = self._sess.request(method, url, json=data, timeout=30)
         except RequestException as e:
             raise UnifiClientException(
-                f'Request failed: {method} {url}: {e}'
+                f'Request failed: {method} {url}: {type(e).__name__}'
             ) from e
 
         if resp.status_code == 401:
