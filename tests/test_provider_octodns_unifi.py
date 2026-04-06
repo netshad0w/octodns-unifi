@@ -93,8 +93,9 @@ RECORDS_RESPONSE = {
             'id': 'rec-srv-1',
             'enabled': True,
             'metadata': {'origin': 'USER_DEFINED'},
-            'domain': '_sip._tcp.example.com',
-            'ttlSeconds': 600,
+            'domain': 'example.com',
+            'service': '_sip',
+            'protocol': '_tcp',
             'serverDomain': 'sip.example.com',
             'priority': 10,
             'weight': 60,
@@ -417,8 +418,9 @@ class TestUnifiProvider(TestCase):
             {
                 'type': 'SRV_RECORD',
                 'id': 'rec-1',
-                'domain': '_sip._tcp.example.com',
-                'ttlSeconds': 600,
+                'domain': 'example.com',
+                'service': '_sip',
+                'protocol': '_tcp',
                 'serverDomain': 'sip.example.com',
                 'priority': 10,
                 'weight': 60,
@@ -691,7 +693,9 @@ class TestUnifiProvider(TestCase):
         self.assertEqual(10, params['priority'])
         self.assertEqual(60, params['weight'])
         self.assertEqual(5060, params['port'])
-        self.assertEqual('_sip._tcp.example.com', params['domain'])
+        self.assertEqual('example.com', params['domain'])
+        self.assertEqual('_sip', params['service'])
+        self.assertEqual('_tcp', params['protocol'])
 
     def test_apply_full_plan(self):
         provider = self._get_provider()
@@ -875,8 +879,9 @@ class TestUnifiProvider(TestCase):
             {
                 'type': 'SRV_RECORD',
                 'id': 'rec-1',
-                'domain': '_sip._tcp.example.com',
-                'ttlSeconds': 600,
+                'domain': 'example.com',
+                'service': '_sip',
+                'protocol': '_tcp',
                 'serverDomain': 'sip.example.com.',
                 'priority': 10,
                 'weight': 60,
@@ -889,6 +894,150 @@ class TestUnifiProvider(TestCase):
 
         record = list(zone.records)[0]
         self.assertEqual('sip.example.com.', record.values[0].target)
+
+    def test_populate_srv_without_service_protocol(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {
+                'type': 'SRV_RECORD',
+                'id': 'rec-1',
+                'domain': '_sip._tcp.example.com',
+                'serverDomain': 'sip.example.com',
+                'priority': 10,
+                'weight': 60,
+                'port': 5060,
+            }
+        ]
+
+        zone = self._get_zone()
+        provider.populate(zone)
+
+        self.assertEqual(1, len(zone.records))
+        record = list(zone.records)[0]
+        self.assertEqual('SRV', record._type)
+        self.assertEqual('_sip._tcp', record.name)
+
+    def test_apply_srv_create_with_host(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = []
+        zone = self._get_zone()
+        provider.populate(zone)
+
+        record = Record.new(
+            zone,
+            '_sip._tcp.sub',
+            {
+                'type': 'SRV',
+                'ttl': 600,
+                'values': [
+                    {
+                        'priority': 10,
+                        'weight': 60,
+                        'port': 5060,
+                        'target': 'sip.example.com.',
+                    }
+                ],
+            },
+        )
+
+        change = MagicMock()
+        change.__class__ = type('Create', (), {})
+        change.__class__.__name__ = 'Create'
+        change.new = record
+
+        provider._apply_Create(change)
+
+        params = provider._client.record_create.call_args[0][0]
+        self.assertEqual('sub.example.com', params['domain'])
+        self.assertEqual('_sip', params['service'])
+        self.assertEqual('_tcp', params['protocol'])
+
+    def test_apply_srv_create_apex(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = []
+        zone = self._get_zone()
+        provider.populate(zone)
+
+        record = Record.new(
+            zone,
+            '_sip._tcp',
+            {
+                'type': 'SRV',
+                'ttl': 600,
+                'values': [
+                    {
+                        'priority': 10,
+                        'weight': 60,
+                        'port': 5060,
+                        'target': 'sip.example.com.',
+                    }
+                ],
+            },
+        )
+
+        change = MagicMock()
+        change.__class__ = type('Create', (), {})
+        change.__class__.__name__ = 'Create'
+        change.new = record
+
+        provider._apply_Create(change)
+
+        params = provider._client.record_create.call_args[0][0]
+        self.assertEqual('example.com', params['domain'])
+        self.assertEqual('_sip', params['service'])
+        self.assertEqual('_tcp', params['protocol'])
+
+    def test_apply_delete_srv_matches(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {
+                'type': 'SRV_RECORD',
+                'id': 'rec-srv-1',
+                'domain': 'example.com',
+                'service': '_sip',
+                'protocol': '_tcp',
+                'serverDomain': 'sip.example.com',
+                'priority': 10,
+                'weight': 60,
+                'port': 5060,
+            }
+        ]
+
+        zone = self._get_zone()
+        provider.populate(zone)
+
+        record = list(zone.records)[0]
+        change = MagicMock()
+        change.existing = record
+
+        provider._apply_Delete(change)
+
+        provider._client.record_delete.assert_called_once_with('rec-srv-1')
+
+    def test_apply_delete_srv_without_service_protocol(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {
+                'type': 'SRV_RECORD',
+                'id': 'rec-srv-1',
+                'domain': '_sip._tcp.example.com',
+                'serverDomain': 'sip.example.com',
+                'priority': 10,
+                'weight': 60,
+                'port': 5060,
+            }
+        ]
+
+        zone = self._get_zone()
+        provider.populate(zone)
+
+        record = list(zone.records)[0]
+        change = MagicMock()
+        change.existing = record
+
+        provider._apply_Delete(change)
+
+        provider._client.record_delete.assert_called_once_with('rec-srv-1')
 
     def test_resolve_site_cached(self):
         provider = self._get_provider()

@@ -270,7 +270,15 @@ class UnifiProvider(BaseProvider):
             if octodns_type is None or octodns_type not in self.SUPPORTS:
                 continue
 
-            name = self._record_name(r.get('domain', ''), zone_name)
+            domain = r.get('domain', '')
+            # SRV records store service/protocol separately in the API
+            if octodns_type == 'SRV':
+                service = r.get('service', '')
+                protocol = r.get('protocol', '')
+                if service and protocol:
+                    domain = f'{service}.{protocol}.{domain}'
+
+            name = self._record_name(domain, zone_name)
             if name is None:
                 continue
 
@@ -294,18 +302,18 @@ class UnifiProvider(BaseProvider):
         )
         return exists
 
+    _TTL_SUPPORTED_TYPES = {'A_RECORD', 'AAAA_RECORD', 'CNAME_RECORD'}
+
     def _params_for_base(self, record, unifi_type):
         zone_name = self._zone_name_sans_dot(record.zone)
         if record.name:
             domain = f'{record.name}.{zone_name}'
         else:
             domain = zone_name
-        return {
-            'type': unifi_type,
-            'enabled': True,
-            'domain': domain,
-            'ttlSeconds': record.ttl,
-        }
+        params = {'type': unifi_type, 'enabled': True, 'domain': domain}
+        if unifi_type in self._TTL_SUPPORTED_TYPES:
+            params['ttlSeconds'] = record.ttl
+        return params
 
     def _params_for_A(self, record):
         for value in record.values:
@@ -338,12 +346,28 @@ class UnifiProvider(BaseProvider):
             yield params
 
     def _params_for_SRV(self, record):
+        zone_name = self._zone_name_sans_dot(record.zone)
+        # SRV names are _service._protocol.name — extract each part
+        parts = record.name.split('.', 2)
+        service = parts[0]
+        protocol = parts[1]
+        host = parts[2] if len(parts) > 2 else ''
+        if host:
+            domain = f'{host}.{zone_name}'
+        else:
+            domain = zone_name
         for value in record.values:
-            params = self._params_for_base(record, 'SRV_RECORD')
-            params['serverDomain'] = value.target.removesuffix('.')
-            params['priority'] = value.priority
-            params['weight'] = value.weight
-            params['port'] = value.port
+            params = {
+                'type': 'SRV_RECORD',
+                'enabled': True,
+                'domain': domain,
+                'service': service,
+                'protocol': protocol,
+                'serverDomain': value.target.removesuffix('.'),
+                'priority': value.priority,
+                'weight': value.weight,
+                'port': value.port,
+            }
             yield params
 
     def _params_for(self, record):
@@ -355,7 +379,13 @@ class UnifiProvider(BaseProvider):
         octodns_type = self._record_type(api_record.get('type', ''))
         if octodns_type != octodns_record._type:
             return False
-        name = self._record_name(api_record.get('domain', ''), zone_name)
+        domain = api_record.get('domain', '')
+        if octodns_type == 'SRV':
+            service = api_record.get('service', '')
+            protocol = api_record.get('protocol', '')
+            if service and protocol:
+                domain = f'{service}.{protocol}.{domain}'
+        name = self._record_name(domain, zone_name)
         return name == octodns_record.name
 
     def _apply_Create(self, change):
