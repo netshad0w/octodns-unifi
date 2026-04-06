@@ -1156,6 +1156,28 @@ class TestUnifiProvider(TestCase):
         self.assertIn('ConnectionError', msg)
         self.assertNotIn(secret, msg)
 
+    def test_apply_delete_no_cache(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = []
+
+        zone = self._get_zone()
+        provider.populate(zone)
+
+        record = Record.new(
+            zone, 'www', {'type': 'A', 'ttl': 300, 'values': ['1.2.3.4']}
+        )
+
+        change = MagicMock()
+        change.existing = record
+
+        # Clear cache to simulate missing zone entry
+        provider._zone_records.clear()
+
+        with self.assertRaises(UnifiClientException):
+            provider._apply_Delete(change)
+
+        provider._client.record_delete.assert_not_called()
+
     def test_apply_delete_skips_missing_id(self):
         provider = self._get_provider()
         provider._client.records.return_value = [
@@ -1299,7 +1321,7 @@ class TestUnifiProvider(TestCase):
 
         provider._client.records.assert_called_once()
 
-    def test_list_zones_cache_consumed_after_first_populate(self):
+    def test_list_zones_cache_reused_for_all_populates(self):
         provider = self._get_provider()
         provider._client.records.return_value = [
             {
@@ -1326,4 +1348,5 @@ class TestUnifiProvider(TestCase):
         zone2 = Zone('other.net.', [])
         provider.populate(zone2)
 
-        self.assertEqual(2, provider._client.records.call_count)
+        # Cache is reused for all populate() calls after list_zones()
+        self.assertEqual(1, provider._client.records.call_count)

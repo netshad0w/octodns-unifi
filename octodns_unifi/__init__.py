@@ -255,11 +255,10 @@ class UnifiProvider(BaseProvider):
         )
 
         zone_name = self._zone_name_sans_dot(zone)
-        # Reuse records fetched by list_zones() on the first populate()
-        # call, subsequent calls fetch fresh data from the API
+        # Reuse records fetched by list_zones() for all populate() calls
+        # in the same sync run; fetch fresh data only when no cache exists
         if self._all_records is not None:
             raw_records = self._all_records
-            self._all_records = None
         else:
             raw_records = self._client.records() or []
         self._zone_records[zone.name] = raw_records
@@ -399,7 +398,12 @@ class UnifiProvider(BaseProvider):
 
     def _apply_Delete(self, change):
         existing = change.existing
-        for record in self._zone_records.get(existing.zone.name, []):
+        if existing.zone.name not in self._zone_records:
+            raise UnifiClientException(
+                f'_apply_Delete: no cached records for zone '
+                f'{existing.zone.name}, populate() must be called first'
+            )
+        for record in self._zone_records[existing.zone.name]:
             if self._record_matches(record, existing):
                 record_id = record.get('id')
                 if record_id is None:
