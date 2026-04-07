@@ -1,3 +1,8 @@
+## 1.1.3 - 2026-04-07
+
+Patch:
+* Improve README clarity and add full record type support table
+
 ## 1.1.2 - 2026-04-06
 
 Patch:

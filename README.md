@@ -20,7 +20,7 @@ Pinning specific versions or SHAs is recommended to avoid unplanned upgrades.
 ```txt
 # Start with the latest versions and don't just copy what's here
 octodns==1.16.0
-octodns-unifi==1.1.2
+octodns-unifi==1.1.3
 ```
 
 #### SHAs
@@ -28,7 +28,7 @@ octodns-unifi==1.1.2
 ```txt
 # Start with the latest/specific versions and don't just copy what's here
 -e git+https://git@github.com/octodns/octodns.git@9da19749e28f68407a1c246dfdf65663cdc1c422#egg=octodns
--e git+https://git@github.com/netshad0w/octodns-unifi.git@c87a2265d85cc4bed1df290397ca7d3148f18b1e#egg=octodns_unifi
+-e git+https://git@github.com/netshad0w/octodns-unifi.git@9da63f00309d76bfa94001c0cfdc0c594a647b97#egg=octodns_unifi
 ```
 
 ## Configuration
