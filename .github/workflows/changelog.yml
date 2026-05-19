@@ -13,7 +13,7 @@ jobs:
       - name: Setup python
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.12'
           architecture: x64
       - name: Setup Environment
         run: |
