@@ -34,12 +34,14 @@ setup(
             # own PR. This will basically happen yearly
             # https://black.readthedocs.io/en/stable/the_black_code_style/index.html#stability-policy
             'black>=26.0.0,<27.0.0',
+            'isort>=5.11.5,<9.0.0',
             'build>=0.7.0',
             'changelet',
-            'isort>=5.11.5',
             'proviso',
             'pyflakes>=2.2.0',
             'readme_renderer[md]>=26.0',
+            # transitive via readme_renderer/twine; cap to exclude pre-releases
+            'docutils<0.23',
             'twine>=3.4.2',
         ),
         'test': tests_require,
