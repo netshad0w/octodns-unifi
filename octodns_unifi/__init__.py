@@ -94,8 +94,15 @@ class UnifiClient:
         if resp.status_code == 204 or not resp.text:
             return None
 
-        body = resp.json()
-        return body.get('data', body)
+        try:
+            body = resp.json()
+        except ValueError as e:
+            raise UnifiClientException(
+                f'Invalid JSON response: {type(e).__name__}'
+            ) from e
+        if isinstance(body, dict):
+            return body.get('data', body)
+        return body
 
     def records(self):
         self._resolve_site()

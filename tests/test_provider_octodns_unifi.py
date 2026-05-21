@@ -238,6 +238,37 @@ class TestUnifiClient(TestCase):
             client._request('GET', '/some/path')
 
     @patch('octodns_unifi.Session')
+    def test_invalid_json(self, mock_session_cls):
+        mock_sess = MagicMock()
+        mock_session_cls.return_value = mock_sess
+
+        mock_resp = Mock()
+        mock_resp.status_code = 200
+        mock_resp.text = 'not json'
+        mock_resp.json.side_effect = ValueError('no json')
+        mock_sess.request.return_value = mock_resp
+
+        client = UnifiClient('unifi.local', 'key')
+
+        with self.assertRaises(UnifiClientException):
+            client._request('GET', '/some/path')
+
+    @patch('octodns_unifi.Session')
+    def test_non_dict_json_body(self, mock_session_cls):
+        mock_sess = MagicMock()
+        mock_session_cls.return_value = mock_sess
+
+        mock_resp = Mock()
+        mock_resp.status_code = 200
+        mock_resp.text = '[]'
+        mock_resp.json.return_value = [{'id': 'x'}]
+        mock_sess.request.return_value = mock_resp
+
+        client = UnifiClient('unifi.local', 'key')
+
+        self.assertEqual([{'id': 'x'}], client._request('GET', '/some/path'))
+
+    @patch('octodns_unifi.Session')
     def test_record_create(self, mock_session_cls):
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
