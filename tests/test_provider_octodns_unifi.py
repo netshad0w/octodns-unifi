@@ -1350,3 +1350,231 @@ class TestUnifiProvider(TestCase):
 
         # Cache is reused for all populate() calls after list_zones()
         self.assertEqual(1, provider._client.records.call_count)
+
+    def test_populate_subzone_parent_child_isolation(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-parent',
+                'domain': 'app.example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '1.2.3.4',
+            },
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-child-apex',
+                'domain': 'platform.example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '5.6.7.8',
+            },
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-child-sub',
+                'domain': 'app.platform.example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '9.10.11.12',
+            },
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-apex',
+                'domain': 'example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '13.14.15.16',
+            },
+        ]
+
+        zone = Zone('example.com.', {'platform'})
+        provider.populate(zone)
+
+        names = sorted(r.name for r in zone.records)
+        self.assertEqual(['', 'app'], names)
+
+    def test_populate_subzone_deep_nesting(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-parent',
+                'domain': 'app.example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '1.2.3.4',
+            },
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-platform',
+                'domain': 'db.platform.example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '5.6.7.8',
+            },
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-deep',
+                'domain': 'host.security.platform.example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '9.10.11.12',
+            },
+        ]
+
+        zone = Zone('example.com.', {'platform', 'security.platform'})
+        provider.populate(zone)
+
+        self.assertEqual(1, len(zone.records))
+        self.assertEqual('app', list(zone.records)[0].name)
+
+    def test_populate_subzone_apex_records_pass(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-a',
+                'domain': 'example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '1.2.3.4',
+            },
+            {
+                'type': 'MX_RECORD',
+                'id': 'rec-mx',
+                'domain': 'example.com',
+                'ttlSeconds': 300,
+                'mailServerDomain': 'mail.example.com',
+                'priority': 10,
+            },
+            {
+                'type': 'TXT_RECORD',
+                'id': 'rec-txt',
+                'domain': 'example.com',
+                'ttlSeconds': 300,
+                'text': 'v=spf1 -all',
+            },
+        ]
+
+        zone = Zone('example.com.', {'platform'})
+        provider.populate(zone)
+
+        types = {r._type for r in zone.records}
+        self.assertEqual({'A', 'MX', 'TXT'}, types)
+
+    def test_populate_subzone_srv_excluded(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {
+                'type': 'SRV_RECORD',
+                'id': 'rec-srv-parent',
+                'domain': 'example.com',
+                'ttlSeconds': 300,
+                'service': '_sip',
+                'protocol': '_tcp',
+                'port': 5060,
+                'priority': 10,
+                'weight': 20,
+                'serverDomain': 'sip.example.com',
+            },
+            {
+                'type': 'SRV_RECORD',
+                'id': 'rec-srv-sub',
+                'domain': 'platform.example.com',
+                'ttlSeconds': 300,
+                'service': '_sip',
+                'protocol': '_tcp',
+                'port': 5060,
+                'priority': 10,
+                'weight': 20,
+                'serverDomain': 'sip.platform.example.com',
+            },
+        ]
+
+        zone = Zone('example.com.', {'platform'})
+        provider.populate(zone)
+
+        self.assertEqual(1, len(zone.records))
+        record = list(zone.records)[0]
+        self.assertEqual('SRV', record._type)
+        self.assertEqual('_sip._tcp', record.name)
+
+    def test_populate_subzone_backcompat_no_subzones(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-1',
+                'domain': 'app.example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '1.2.3.4',
+            },
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-2',
+                'domain': 'deep.nested.example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '5.6.7.8',
+            },
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-3',
+                'domain': 'example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '9.10.11.12',
+            },
+        ]
+
+        zone = Zone('example.com.', set())
+        provider.populate(zone)
+
+        names = sorted(r.name for r in zone.records)
+        self.assertEqual(['', 'app', 'deep.nested'], names)
+
+    def test_apply_delete_skips_cross_zone_records(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-same',
+                'domain': 'www.example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '1.2.3.4',
+            },
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-cross',
+                'domain': 'www.other.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '5.6.7.8',
+            },
+        ]
+
+        zone = self._get_zone()
+        provider.populate(zone)
+
+        record = list(zone.records)[0]
+        change = MagicMock()
+        change.existing = record
+
+        provider._apply_Delete(change)
+
+        provider._client.record_delete.assert_called_once_with('rec-same')
+
+    def test_populate_subzone_wildcard_in_parent(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-wild-parent',
+                'domain': '*.foo.example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '1.2.3.4',
+            },
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-wild-sub',
+                'domain': '*.platform.example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '5.6.7.8',
+            },
+        ]
+
+        zone = Zone('example.com.', {'platform'})
+        provider.populate(zone)
+
+        self.assertEqual(1, len(zone.records))
+        self.assertEqual('*.foo', list(zone.records)[0].name)

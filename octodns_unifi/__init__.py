@@ -280,10 +280,11 @@ class UnifiProvider(BaseProvider):
                 if service and protocol:
                     domain = f'{service}.{protocol}.{domain}'
 
-            name = self._record_name(domain, zone_name)
-            if name is None:
+            # Skip empty or sub-zone-owned records
+            if not domain or not zone.owns(octodns_type, domain):
                 continue
 
+            name = self._record_name(domain, zone_name)
             grouped[name][octodns_type].append(r)
 
         before = len(zone.records)
