@@ -126,8 +126,6 @@ _UNIFI_TYPE_MAP = {
     'SRV_RECORD': 'SRV',
 }
 
-_OCTODNS_TYPE_MAP = {v: k for k, v in _UNIFI_TYPE_MAP.items()}
-
 
 class UnifiProvider(BaseProvider):
     SUPPORTS_GEO = False
