@@ -1,3 +1,13 @@
+## 1.1.4 - 2026-05-23
+
+Patch:
+* Fix sub-zone record leakage in populate() using native zone.owns()
+* Harden GitHub Actions workflows with least-privilege permissions and SHA-pinned actions
+* Remove unused _OCTODNS_TYPE_MAP map
+* Harden UnifiClient response parsing against non-JSON and non-dict API responses
+* Fix Changelog workflow Python version and add CodeQL analysis workflow
+* Refresh pinned dev/build requirements (octodns 1.17.0, cryptography 48.0.0, idna 3.16) and cap isort/docutils below their pre-release lines
+
 ## 1.1.3 - 2026-04-07
 
 Patch:

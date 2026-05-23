@@ -24,7 +24,7 @@ tests_require = ('pytest', 'pytest-cov', 'pytest-network')
 
 setup(
     author='netshad0w',
-    author_email='contact@nyxa.sh',
+    author_email='netshad0w@nyxa.sh',
     description=description,
     extras_require={
         'dev': tests_require
