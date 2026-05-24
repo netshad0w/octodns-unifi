@@ -338,6 +338,52 @@ class TestUnifiClient(TestCase):
 
         self.assertIsNone(result)
 
+    @patch('octodns_unifi.Session')
+    def test_invalid_host(self, mock_session_cls):
+        mock_session_cls.return_value = MagicMock()
+
+        for bad in ('evil.com/proxy', 'evil.com?x=1', 'a b', 'user@host', ''):
+            with self.assertRaises(UnifiClientException) as ctx:
+                UnifiClient(bad, 'key')
+            self.assertIn('Invalid host', str(ctx.exception))
+
+    @patch('octodns_unifi.Session')
+    def test_invalid_console_id(self, mock_session_cls):
+        mock_session_cls.return_value = MagicMock()
+
+        with self.assertRaises(UnifiClientException) as ctx:
+            UnifiClient('unifi.local', 'key', console_id='../escape')
+        self.assertIn('Invalid console_id', str(ctx.exception))
+
+    @patch('octodns_unifi.Session')
+    def test_record_delete_invalid_id(self, mock_session_cls):
+        mock_sess = MagicMock()
+        mock_session_cls.return_value = mock_sess
+
+        client = UnifiClient('unifi.local', 'key')
+        with self.assertRaises(UnifiClientException) as ctx:
+            client.record_delete('../../other-resource')
+        self.assertIn('Invalid record id', str(ctx.exception))
+        # fails fast, before any network call
+        mock_sess.request.assert_not_called()
+
+    @patch('octodns_unifi.Session')
+    def test_resolve_site_invalid_id(self, mock_session_cls):
+        mock_sess = MagicMock()
+        mock_session_cls.return_value = mock_sess
+
+        mock_resp = Mock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            'data': [{'id': '../../../admin', 'name': 'default'}]
+        }
+        mock_sess.request.return_value = mock_resp
+
+        client = UnifiClient('unifi.local', 'key', site='default')
+        with self.assertRaises(UnifiClientException) as ctx:
+            client._resolve_site()
+        self.assertIn('Invalid site id', str(ctx.exception))
+
 
 class TestUnifiProvider(TestCase):
     def _get_provider(self):

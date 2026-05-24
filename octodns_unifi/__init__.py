@@ -1,5 +1,6 @@
 from collections import defaultdict
 from logging import getLogger
+from re import compile as re_compile
 
 import urllib3
 from requests import Session
@@ -9,6 +10,13 @@ from octodns.provider.base import BaseProvider
 from octodns.record import Record
 
 __version__ = '1.1.4'
+
+# Reject hosts with characters that could break out of the
+# https://{host}/proxy/network URL (path, query, fragment, credentials)
+_HOST_FORBIDDEN_RE = re_compile(r'[\s/\\?#@]')
+# console_id, site id and record id go into URL paths; require a leading
+# alphanumeric so values like '..' or ':' can't traverse or alter the path
+_SAFE_ID_RE = re_compile(r'^[A-Za-z0-9][A-Za-z0-9._:-]*$')
 
 
 class UnifiClientException(Exception):
@@ -42,11 +50,17 @@ class UnifiClient:
         self._sess = sess
 
         if console_id:
+            if not _SAFE_ID_RE.match(str(console_id)):
+                raise UnifiClientException(
+                    f'Invalid console_id: {console_id!r}'
+                )
             self._base = (
                 f'https://api.ui.com/v1/connector/consoles'
                 f'/{console_id}/proxy/network'
             )
         else:
+            if not host or _HOST_FORBIDDEN_RE.search(host):
+                raise UnifiClientException(f'Invalid host: {host!r}')
             self._base = f'https://{host}/proxy/network'
 
         self._site_name = site
@@ -68,6 +82,8 @@ class UnifiClient:
             raise UnifiClientException(
                 f'Site {self._site_name!r} not found on controller'
             )
+        if not _SAFE_ID_RE.match(str(self._site_id)):
+            raise UnifiClientException(f'Invalid site id: {self._site_id!r}')
 
         self._dns_path = f'/integration/v1/sites/{self._site_id}/dns/policies'
         self.log.debug(
@@ -113,6 +129,8 @@ class UnifiClient:
         return self._request('POST', self._dns_path, data)
 
     def record_delete(self, record_id):
+        if not _SAFE_ID_RE.match(str(record_id)):
+            raise UnifiClientException(f'Invalid record id: {record_id!r}')
         self._resolve_site()
         return self._request('DELETE', f'{self._dns_path}/{record_id}')
 
