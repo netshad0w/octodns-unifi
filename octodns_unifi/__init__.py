@@ -58,7 +58,7 @@ class UnifiClient:
             return
 
         resp = self._request('GET', '/integration/v1/sites')
-        for s in resp:
+        for s in resp or []:
             site_id = s.get('id')
             if site_id and s.get('name', '').lower() == self._site_name.lower():
                 self._site_id = site_id

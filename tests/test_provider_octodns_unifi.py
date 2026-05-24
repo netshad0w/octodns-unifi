@@ -190,6 +190,22 @@ class TestUnifiClient(TestCase):
             client._resolve_site()
 
     @patch('octodns_unifi.Session')
+    def test_resolve_site_null_response(self, mock_session_cls):
+        mock_sess = MagicMock()
+        mock_session_cls.return_value = mock_sess
+
+        mock_resp = Mock()
+        mock_resp.status_code = 200
+        mock_resp.text = '{"data": null}'
+        mock_resp.json.return_value = {'data': None}
+        mock_sess.request.return_value = mock_resp
+
+        client = UnifiClient('unifi.local', 'key', site='default')
+
+        with self.assertRaises(UnifiClientException):
+            client._resolve_site()
+
+    @patch('octodns_unifi.Session')
     def test_records(self, mock_session_cls):
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
@@ -267,6 +283,21 @@ class TestUnifiClient(TestCase):
         client = UnifiClient('unifi.local', 'key')
 
         self.assertEqual([{'id': 'x'}], client._request('GET', '/some/path'))
+
+    @patch('octodns_unifi.Session')
+    def test_null_data_body(self, mock_session_cls):
+        mock_sess = MagicMock()
+        mock_session_cls.return_value = mock_sess
+
+        mock_resp = Mock()
+        mock_resp.status_code = 200
+        mock_resp.text = '{"data": null}'
+        mock_resp.json.return_value = {'data': None}
+        mock_sess.request.return_value = mock_resp
+
+        client = UnifiClient('unifi.local', 'key')
+
+        self.assertIsNone(client._request('GET', '/some/path'))
 
     @patch('octodns_unifi.Session')
     def test_record_create(self, mock_session_cls):
