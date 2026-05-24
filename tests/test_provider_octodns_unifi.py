@@ -1686,3 +1686,26 @@ class TestUnifiProvider(TestCase):
 
         self.assertEqual(1, len(zone.records))
         self.assertEqual('*.foo', list(zone.records)[0].name)
+
+    def test_data_for_cname_empty_records(self):
+        provider = self._get_provider()
+        with self.assertRaises(UnifiClientException):
+            provider._data_for_CNAME('CNAME', [])
+
+    def test_params_for_srv_invalid_name(self):
+        provider = self._get_provider()
+        record = MagicMock()
+        record.name = 'notsrv'
+        record.zone = self._get_zone()
+        with self.assertRaises(UnifiClientException) as ctx:
+            list(provider._params_for_SRV(record))
+        self.assertIn('_service._protocol', str(ctx.exception))
+
+    def test_record_matches_cross_zone_returns_false(self):
+        provider = self._get_provider()
+        zone = self._get_zone()
+        octodns_record = Record.new(
+            zone, 'www', {'type': 'A', 'ttl': 300, 'values': ['1.2.3.4']}
+        )
+        api_record = {'type': 'A_RECORD', 'domain': 'www.other.com'}
+        self.assertFalse(provider._record_matches(api_record, octodns_record))

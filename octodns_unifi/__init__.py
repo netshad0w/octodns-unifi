@@ -233,6 +233,8 @@ class UnifiProvider(BaseProvider):
         }
 
     def _data_for_CNAME(self, _type, records):
+        if not records:
+            raise UnifiClientException('_data_for_CNAME: no records to map')
         value = records[0]['targetDomain']
         if not value.endswith('.'):
             value = f'{value}.'
@@ -287,9 +289,11 @@ class UnifiProvider(BaseProvider):
             raw_records = self._all_records
         else:
             raw_records = self._client.records() or []
-        self._zone_records[zone.name] = raw_records
 
         grouped = defaultdict(lambda: defaultdict(list))
+        # Cache only this zone's records so _apply_Delete can't match (and
+        # delete) a record owned by another managed zone
+        owned_records = []
         for r in raw_records:
             octodns_type = self._record_type(r.get('type', ''))
             if octodns_type is None or octodns_type not in self.SUPPORTS:
@@ -307,8 +311,11 @@ class UnifiProvider(BaseProvider):
             if not domain or not zone.owns(octodns_type, domain):
                 continue
 
+            owned_records.append(r)
             name = self._record_name(domain, zone_name)
             grouped[name][octodns_type].append(r)
+
+        self._zone_records[zone.name] = owned_records
 
         before = len(zone.records)
         for name, types in grouped.items():
@@ -375,6 +382,10 @@ class UnifiProvider(BaseProvider):
         zone_name = self._zone_name_sans_dot(record.zone)
         # SRV names are _service._protocol.name — extract each part
         parts = record.name.split('.', 2)
+        if len(parts) < 2:
+            raise UnifiClientException(
+                f'SRV record name {record.name!r} is not _service._protocol'
+            )
         service = parts[0]
         protocol = parts[1]
         host = parts[2] if len(parts) > 2 else ''
@@ -412,6 +423,8 @@ class UnifiProvider(BaseProvider):
             if service and protocol:
                 domain = f'{service}.{protocol}.{domain}'
         name = self._record_name(domain, zone_name)
+        if name is None:
+            return False
         return name == octodns_record.name
 
     def _apply_Create(self, change):
