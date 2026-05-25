@@ -1250,10 +1250,14 @@ class TestUnifiProvider(TestCase):
         ]
 
         zone = self._get_zone()
-        provider.populate(zone)
+        with self.assertLogs('UnifiProvider[test]', level='WARNING') as cm:
+            provider.populate(zone)
 
         record = list(zone.records)[0]
         self.assertEqual(600, record.ttl)
+        self.assertTrue(
+            any('inconsistent TTLs' in m for m in cm.output), cm.output
+        )
 
     @patch('octodns_unifi.Session')
     def test_connection_error(self, mock_session_cls):
@@ -1718,3 +1722,143 @@ class TestUnifiProvider(TestCase):
         )
         api_record = {'type': 'A_RECORD', 'domain': 'www.other.com'}
         self.assertFalse(provider._record_matches(api_record, octodns_record))
+
+    def test_populate_negative_ttl_ignored(self):
+        provider = UnifiProvider(
+            'test', 'unifi.local', 'test-api-key', default_ttl=600
+        )
+        provider._client = MagicMock()
+        provider._client.records.return_value = [
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-1',
+                'domain': 'www.example.com',
+                'ttlSeconds': -1,
+                'ipv4Address': '1.2.3.4',
+            }
+        ]
+
+        zone = self._get_zone()
+        provider.populate(zone)
+
+        self.assertEqual(600, list(zone.records)[0].ttl)
+
+    def test_data_for_cname_duplicate_warns(self):
+        provider = self._get_provider()
+        records = [
+            {'targetDomain': 'a.example.com', 'ttlSeconds': 300},
+            {'targetDomain': 'b.example.com', 'ttlSeconds': 300},
+        ]
+        with self.assertLogs('UnifiProvider[test]', level='WARNING') as cm:
+            data = provider._data_for_CNAME('CNAME', records)
+        self.assertEqual('a.example.com.', data['value'])
+        self.assertTrue(
+            any('share one name' in m for m in cm.output), cm.output
+        )
+
+    def test_params_ttl_only_for_supported_types(self):
+        provider = self._get_provider()
+        zone = self._get_zone()
+
+        a = Record.new(
+            zone, 'www', {'type': 'A', 'ttl': 300, 'values': ['1.2.3.4']}
+        )
+        self.assertEqual(300, list(provider._params_for_A(a))[0]['ttlSeconds'])
+
+        aaaa = Record.new(
+            zone, 'v6', {'type': 'AAAA', 'ttl': 300, 'values': ['2001:db8::1']}
+        )
+        self.assertIn('ttlSeconds', list(provider._params_for_AAAA(aaaa))[0])
+
+        cname = Record.new(
+            zone,
+            'alias',
+            {'type': 'CNAME', 'ttl': 300, 'value': 'www.example.com.'},
+        )
+        self.assertIn('ttlSeconds', list(provider._params_for_CNAME(cname))[0])
+
+        mx = Record.new(
+            zone,
+            '',
+            {
+                'type': 'MX',
+                'ttl': 300,
+                'values': [{'preference': 10, 'exchange': 'mail.example.com.'}],
+            },
+        )
+        self.assertNotIn('ttlSeconds', list(provider._params_for_MX(mx))[0])
+
+        txt = Record.new(
+            zone, 'note', {'type': 'TXT', 'ttl': 300, 'values': ['hello']}
+        )
+        self.assertNotIn('ttlSeconds', list(provider._params_for_TXT(txt))[0])
+
+        srv = Record.new(
+            zone,
+            '_sip._tcp',
+            {
+                'type': 'SRV',
+                'ttl': 300,
+                'values': [
+                    {
+                        'priority': 0,
+                        'weight': 0,
+                        'port': 5060,
+                        'target': 'sip.example.com.',
+                    }
+                ],
+            },
+        )
+        self.assertNotIn('ttlSeconds', list(provider._params_for_SRV(srv))[0])
+
+    def test_populate_domain_case_insensitive(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-1',
+                'domain': 'WWW.Example.COM',
+                'ttlSeconds': 300,
+                'ipv4Address': '1.2.3.4',
+            }
+        ]
+
+        zone = self._get_zone()
+        provider.populate(zone)
+
+        self.assertEqual(1, len(zone.records))
+        self.assertEqual('www', list(zone.records)[0].name)
+
+    def test_plan_and_apply_end_to_end(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-1',
+                'domain': 'www.example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '1.2.3.4',
+            }
+        ]
+
+        desired = Zone('example.com.', [])
+        desired.add_record(
+            Record.new(
+                desired, 'www', {'type': 'A', 'ttl': 300, 'values': ['9.9.9.9']}
+            )
+        )
+        desired.add_record(
+            Record.new(
+                desired,
+                'mail',
+                {'type': 'A', 'ttl': 300, 'values': ['8.8.8.8']},
+            )
+        )
+
+        plan = provider.plan(desired)
+        self.assertIsNotNone(plan)
+        provider.apply(plan)
+
+        provider._client.record_delete.assert_called_once_with('rec-1')
+        self.assertTrue(provider._client.record_create.called)
+        self.assertNotIn(desired.name, provider._zone_records)

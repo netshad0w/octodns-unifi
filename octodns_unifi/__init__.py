@@ -215,8 +215,9 @@ class UnifiProvider(BaseProvider):
         return _UNIFI_TYPE_MAP.get(unifi_type)
 
     def _ttl(self, records):
-        ttls = {r.get('ttlSeconds', 0) for r in records}
-        ttls.discard(0)
+        # Keep only positive TTLs; 0 means "unset" and a negative value from a
+        # misbehaving controller would otherwise reach octodns validation
+        ttls = {t for t in (r.get('ttlSeconds', 0) for r in records) if t > 0}
         if len(ttls) > 1:
             self.log.warning('_ttl: inconsistent TTLs %s, using max', ttls)
         return max(ttls) if ttls else self._default_ttl
@@ -238,6 +239,11 @@ class UnifiProvider(BaseProvider):
     def _data_for_CNAME(self, _type, records):
         if not records:
             raise ValueError('_data_for_CNAME: no records to map')
+        if len(records) > 1:
+            self.log.warning(
+                '_data_for_CNAME: %d records share one name, using first',
+                len(records),
+            )
         value = records[0]['targetDomain']
         if not value.endswith('.'):
             value = f'{value}.'
@@ -302,11 +308,13 @@ class UnifiProvider(BaseProvider):
             if octodns_type is None or octodns_type not in self.SUPPORTS:
                 continue
 
-            domain = r.get('domain', '')
+            # DNS names are case-insensitive; lower-case so a mixed-case
+            # domain from the controller isn't dropped by zone.owns()
+            domain = r.get('domain', '').lower()
             # SRV records store service/protocol separately in the API
             if octodns_type == 'SRV':
-                service = r.get('service', '')
-                protocol = r.get('protocol', '')
+                service = r.get('service', '').lower()
+                protocol = r.get('protocol', '').lower()
                 if service and protocol:
                     domain = f'{service}.{protocol}.{domain}'
 
@@ -419,10 +427,10 @@ class UnifiProvider(BaseProvider):
         octodns_type = self._record_type(api_record.get('type', ''))
         if octodns_type != octodns_record._type:
             return False
-        domain = api_record.get('domain', '')
+        domain = api_record.get('domain', '').lower()
         if octodns_type == 'SRV':
-            service = api_record.get('service', '')
-            protocol = api_record.get('protocol', '')
+            service = api_record.get('service', '').lower()
+            protocol = api_record.get('protocol', '').lower()
             if service and protocol:
                 domain = f'{service}.{protocol}.{domain}'
         name = self._record_name(domain, zone_name)
