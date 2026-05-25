@@ -28,7 +28,7 @@ python -m pip install -r requirements.txt
 if [ -d ".git" ]; then
     if [ -f ".git-blame-ignore-revs" ]; then
         echo ""
-        echo "Setting blame.ignoreRevsFile to .git-blame-ingore-revs"
+        echo "Setting blame.ignoreRevsFile to .git-blame-ignore-revs"
         git config --local blame.ignoreRevsFile .git-blame-ignore-revs
     fi
     if [ ! -L ".git/hooks/pre-commit" ]; then

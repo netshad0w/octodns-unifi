@@ -22,10 +22,12 @@ fi
 
 VERSION="$(grep "^__version__" "octodns_unifi/__init__.py" | sed -e "s/.* = '//" -e "s/'$//")"
 
+# Build and validate the artifacts before tagging so a broken build can't
+# leave a pushed tag with nothing on PyPI behind it
+python -m build --sdist --wheel
+twine check dist/*$VERSION.tar.gz dist/*$VERSION*.whl
 git tag -s "v$VERSION" -m "Release $VERSION"
 git push origin "v$VERSION"
 echo "Tagged and pushed v$VERSION"
-python -m build --sdist --wheel
-twine check dist/*$VERSION.tar.gz dist/*$VERSION*.whl
 twine upload dist/*$VERSION.tar.gz dist/*$VERSION*.whl
 echo "Uploaded $VERSION"
