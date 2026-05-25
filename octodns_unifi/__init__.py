@@ -12,12 +12,14 @@ from octodns.record import Record
 __version__ = '1.1.4'
 
 # Reject hosts with characters that could break out of the
-# https://{host}/proxy/network URL (path, query, fragment, credentials)
-_HOST_FORBIDDEN_RE = re_compile(r'[\x00\s/\\?#@]')
+# https://{host}/proxy/network URL (path, query, fragment, credentials,
+# percent-encoding)
+_HOST_FORBIDDEN_RE = re_compile(r'[\x00\s/\\?#@%]')
 # console_id, site id and record id go into URL paths; require a leading
 # alphanumeric so values like '..' or ':' can't traverse or alter the path.
-# \A/\Z (not ^/$) so a trailing newline can't slip past the anchor.
-_SAFE_ID_RE = re_compile(r'\A[A-Za-z0-9][A-Za-z0-9._:-]*\Z')
+# \A/\Z (not ^/$) so a trailing newline can't slip past the anchor. Length is
+# bounded so a hostile or buggy id can't produce an oversized URL.
+_SAFE_ID_RE = re_compile(r'\A[A-Za-z0-9][A-Za-z0-9._:-]{0,254}\Z')
 
 
 class UnifiClientException(Exception):

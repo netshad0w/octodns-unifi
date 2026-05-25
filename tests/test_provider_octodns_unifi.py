@@ -348,6 +348,7 @@ class TestUnifiClient(TestCase):
             'a b',
             'user@host',
             'evil\x00.com',
+            'evil.com%2fadmin',
             '',
         ):
             with self.assertRaises(UnifiClientException) as ctx:
@@ -358,7 +359,7 @@ class TestUnifiClient(TestCase):
     def test_invalid_console_id(self, mock_session_cls):
         mock_session_cls.return_value = MagicMock()
 
-        for bad in ('../escape', 'good\n'):
+        for bad in ('../escape', 'good\n', 'a' + 'b' * 300):
             with self.assertRaises(UnifiClientException) as ctx:
                 UnifiClient('unifi.local', 'key', console_id=bad)
             self.assertIn('Invalid console_id', str(ctx.exception))
