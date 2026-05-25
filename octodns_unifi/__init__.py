@@ -235,7 +235,7 @@ class UnifiProvider(BaseProvider):
 
     def _data_for_CNAME(self, _type, records):
         if not records:
-            raise UnifiClientException('_data_for_CNAME: no records to map')
+            raise ValueError('_data_for_CNAME: no records to map')
         value = records[0]['targetDomain']
         if not value.endswith('.'):
             value = f'{value}.'
@@ -384,7 +384,7 @@ class UnifiProvider(BaseProvider):
         # SRV names are _service._protocol.name — extract each part
         parts = record.name.split('.', 2)
         if len(parts) < 2:
-            raise UnifiClientException(
+            raise ValueError(
                 f'SRV record name {record.name!r} is not _service._protocol'
             )
         service = parts[0]

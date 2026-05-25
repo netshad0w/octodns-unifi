@@ -1697,7 +1697,7 @@ class TestUnifiProvider(TestCase):
 
     def test_data_for_cname_empty_records(self):
         provider = self._get_provider()
-        with self.assertRaises(UnifiClientException):
+        with self.assertRaises(ValueError):
             provider._data_for_CNAME('CNAME', [])
 
     def test_params_for_srv_invalid_name(self):
@@ -1705,7 +1705,7 @@ class TestUnifiProvider(TestCase):
         record = MagicMock()
         record.name = 'notsrv'
         record.zone = self._get_zone()
-        with self.assertRaises(UnifiClientException) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             list(provider._params_for_SRV(record))
         self.assertIn('_service._protocol', str(ctx.exception))
 
