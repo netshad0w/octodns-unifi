@@ -1829,6 +1829,23 @@ class TestUnifiProvider(TestCase):
         self.assertEqual(1, len(zone.records))
         self.assertEqual('www', list(zone.records)[0].name)
 
+    def test_populate_fetches_records_once(self):
+        provider = self._get_provider()
+        provider._client.records.return_value = [
+            {
+                'type': 'A_RECORD',
+                'id': 'rec-1',
+                'domain': 'www.example.com',
+                'ttlSeconds': 300,
+                'ipv4Address': '1.2.3.4',
+            }
+        ]
+
+        provider.populate(Zone('example.com.', []))
+        provider.populate(Zone('example.com.', []))
+
+        self.assertEqual(1, provider._client.records.call_count)
+
     def test_plan_and_apply_end_to_end(self):
         provider = self._get_provider()
         provider._client.records.return_value = [

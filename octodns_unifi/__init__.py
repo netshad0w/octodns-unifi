@@ -298,6 +298,9 @@ class UnifiProvider(BaseProvider):
             raw_records = self._all_records
         else:
             raw_records = self._client.records() or []
+            # Cache for any further populate() in this run reached without
+            # going through list_zones() first (e.g. source-only use)
+            self._all_records = raw_records
 
         grouped = defaultdict(lambda: defaultdict(list))
         # Cache only this zone's records so _apply_Delete can't match (and
