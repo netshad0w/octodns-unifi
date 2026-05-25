@@ -1,3 +1,14 @@
+## 1.1.5 - 2026-05-25
+
+Patch:
+* Normalize record domain case from the controller so mixed-case records aren't skipped
+* Guard _resolve_site against a null or empty sites response from the controller
+* Ignore non-positive TTL values from the controller and fall back to the configured default
+* Validate host, console_id, site and record ids before using them in request URLs
+* Bump CodeQL action to v4 (Node 24)
+* Warn instead of silently dropping extra records when multiple CNAMEs share a name
+* Cache only zone-owned records in populate() so deletes can't reach another managed zone
+
 ## 1.1.4 - 2026-05-23
 
 Patch:
