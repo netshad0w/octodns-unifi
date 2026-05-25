@@ -342,7 +342,14 @@ class TestUnifiClient(TestCase):
     def test_invalid_host(self, mock_session_cls):
         mock_session_cls.return_value = MagicMock()
 
-        for bad in ('evil.com/proxy', 'evil.com?x=1', 'a b', 'user@host', ''):
+        for bad in (
+            'evil.com/proxy',
+            'evil.com?x=1',
+            'a b',
+            'user@host',
+            'evil\x00.com',
+            '',
+        ):
             with self.assertRaises(UnifiClientException) as ctx:
                 UnifiClient(bad, 'key')
             self.assertIn('Invalid host', str(ctx.exception))
@@ -351,9 +358,10 @@ class TestUnifiClient(TestCase):
     def test_invalid_console_id(self, mock_session_cls):
         mock_session_cls.return_value = MagicMock()
 
-        with self.assertRaises(UnifiClientException) as ctx:
-            UnifiClient('unifi.local', 'key', console_id='../escape')
-        self.assertIn('Invalid console_id', str(ctx.exception))
+        for bad in ('../escape', 'good\n'):
+            with self.assertRaises(UnifiClientException) as ctx:
+                UnifiClient('unifi.local', 'key', console_id=bad)
+            self.assertIn('Invalid console_id', str(ctx.exception))
 
     @patch('octodns_unifi.Session')
     def test_record_delete_invalid_id(self, mock_session_cls):
