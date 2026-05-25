@@ -45,8 +45,9 @@ providers:
     api_key: env/UNIFI_API_KEY
     # Site name (defaults to 'default')
     site: default
-    # SSL verification (defaults to true)
-    # Set to false for self-signed certificates
+    # SSL verification (defaults to true). Set to false to disable it, or
+    # point it at a CA bundle (e.g. /etc/ssl/internal-ca.crt) to trust a
+    # self-signed/internal certificate without turning verification off.
     verify_ssl: true
     # Console ID for cloud access via api.ui.com (see below)
     # console_id: "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX:123456"
