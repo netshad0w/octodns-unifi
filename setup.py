@@ -42,6 +42,8 @@ setup(
             'readme_renderer[md]>=26.0',
             # transitive via readme_renderer/twine; cap to exclude pre-releases
             'docutils<0.23',
+            # transitive (anyio/black/...); cap to exclude pre-releases
+            'typing-extensions<4.16.0',
             'twine>=3.4.2',
         ),
         'test': tests_require,
