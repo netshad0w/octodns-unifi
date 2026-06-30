@@ -9,7 +9,7 @@ from requests.exceptions import RequestException
 from octodns.provider.base import BaseProvider
 from octodns.record import Record
 
-__version__ = '1.1.5'
+__version__ = '1.2.0'
 
 # Reject hosts with characters that could break out of the
 # https://{host}/proxy/network URL (path, query, fragment, credentials,

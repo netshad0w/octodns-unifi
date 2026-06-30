@@ -1,3 +1,11 @@
+## 1.2.0 - 2026-06-30
+
+Minor:
+* Require Python >= 3.11 (drop 3.9 and 3.10)
+
+Patch:
+* Refresh pinned dev/build requirements (cryptography 49.0.0, msgpack 1.2.1, octodns 1.20.0) and cap typing-extensions below its pre-release line
+
 ## 1.1.5 - 2026-05-25
 
 Patch:
