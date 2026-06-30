@@ -54,7 +54,7 @@ setup(
     long_description_content_type='text/markdown',
     name='octodns-unifi',
     packages=find_packages(),
-    python_requires='>=3.9',
+    python_requires='>=3.11',
     tests_require=tests_require,
     url='https://github.com/netshad0w/octodns-unifi',
     version=version(),

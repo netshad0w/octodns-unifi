@@ -17,7 +17,12 @@ jobs:
         delim="EOF_$(openssl rand -hex 12)"
         {
           echo "json<<${delim}"
-          curl -fsSL https://github.com/octodns/octodns/raw/main/.ci-config.json
+          curl -fsSL https://github.com/octodns/octodns/raw/main/.ci-config.json \
+            | jq -c '
+                def supported: (split(".") | map(tonumber)) as $v | $v[0] > 3 or ($v[0] == 3 and $v[1] >= 11);
+                .python_versions_active |= map(select(try supported catch false))
+                | .python_version_current |= (try (if supported then . else "3.11" end) catch "3.11")
+              '
           echo "${delim}"
         } >> "$GITHUB_OUTPUT"
   ci:
