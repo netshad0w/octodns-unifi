@@ -34,7 +34,7 @@ setup(
             # own PR. This will basically happen yearly
             # https://black.readthedocs.io/en/stable/the_black_code_style/index.html#stability-policy
             'black>=26.0.0,<27.0.0',
-            'isort>=5.11.5,<9.0.0',
+            'isort>=5.11.5,<10.0.0',
             'build>=0.7.0',
             'changelet',
             'proviso',
