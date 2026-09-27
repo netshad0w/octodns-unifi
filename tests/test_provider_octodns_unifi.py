@@ -393,6 +393,165 @@ class TestUnifiClient(TestCase):
             client._resolve_site()
         self.assertIn('Invalid site id', str(ctx.exception))
 
+    @staticmethod
+    def _page(data, total):
+        resp = Mock()
+        resp.status_code = 200
+        resp.json.return_value = {
+            'offset': 0,
+            'limit': 200,
+            'count': len(data),
+            'totalCount': total,
+            'data': data,
+        }
+        return resp
+
+    @patch('octodns_unifi.Session')
+    def test_records_walks_every_page(self, mock_session_cls):
+        mock_sess = MagicMock()
+        mock_session_cls.return_value = mock_sess
+
+        sites_resp = Mock()
+        sites_resp.status_code = 200
+        sites_resp.json.return_value = SITES_RESPONSE
+
+        # 5 records spread over 3 pages, the way the controller hands them
+        # back once a site has more records than the page limit
+        mock_sess.request.side_effect = [
+            sites_resp,
+            self._page([{'id': 'a'}, {'id': 'b'}], 5),
+            self._page([{'id': 'c'}, {'id': 'd'}], 5),
+            self._page([{'id': 'e'}], 5),
+        ]
+
+        client = UnifiClient('unifi.local', 'key')
+        records = client.records()
+
+        self.assertEqual(['a', 'b', 'c', 'd', 'e'], [r['id'] for r in records])
+
+    @patch('octodns_unifi.Session')
+    def test_records_requests_successive_offsets(self, mock_session_cls):
+        mock_sess = MagicMock()
+        mock_session_cls.return_value = mock_sess
+
+        sites_resp = Mock()
+        sites_resp.status_code = 200
+        sites_resp.json.return_value = SITES_RESPONSE
+
+        mock_sess.request.side_effect = [
+            sites_resp,
+            self._page([{'id': 'a'}, {'id': 'b'}], 3),
+            self._page([{'id': 'c'}], 3),
+        ]
+
+        client = UnifiClient('unifi.local', 'key')
+        client.records()
+
+        offsets = [
+            call.kwargs['params']['offset']
+            for call in mock_sess.request.call_args_list
+            if 'dns/policies' in call.args[1]
+        ]
+        self.assertEqual([0, 2], offsets)
+
+    @patch('octodns_unifi.Session')
+    def test_records_single_page_makes_one_request(self, mock_session_cls):
+        mock_sess = MagicMock()
+        mock_session_cls.return_value = mock_sess
+
+        sites_resp = Mock()
+        sites_resp.status_code = 200
+        sites_resp.json.return_value = SITES_RESPONSE
+
+        mock_sess.request.side_effect = [
+            sites_resp,
+            self._page([{'id': 'a'}], 1),
+        ]
+
+        client = UnifiClient('unifi.local', 'key')
+        records = client.records()
+
+        self.assertEqual([{'id': 'a'}], records)
+        # sites lookup + a single page, no needless extra round-trip
+        self.assertEqual(2, mock_sess.request.call_count)
+
+    @patch('octodns_unifi.Session')
+    def test_records_stops_on_short_page(self, mock_session_cls):
+        mock_sess = MagicMock()
+        mock_session_cls.return_value = mock_sess
+
+        sites_resp = Mock()
+        sites_resp.status_code = 200
+        sites_resp.json.return_value = SITES_RESPONSE
+
+        # a controller that claims more than it hands back must not spin us
+        mock_sess.request.side_effect = [
+            sites_resp,
+            self._page([{'id': 'a'}], 99),
+            self._page([], 99),
+        ]
+
+        client = UnifiClient('unifi.local', 'key')
+        records = client.records()
+
+        self.assertEqual([{'id': 'a'}], records)
+
+    @patch('octodns_unifi.Session')
+    def test_records_null_data(self, mock_session_cls):
+        mock_sess = MagicMock()
+        mock_session_cls.return_value = mock_sess
+
+        sites_resp = Mock()
+        sites_resp.status_code = 200
+        sites_resp.json.return_value = SITES_RESPONSE
+
+        empty_resp = Mock()
+        empty_resp.status_code = 200
+        empty_resp.text = '{"data": null}'
+        empty_resp.json.return_value = {'data': None}
+
+        mock_sess.request.side_effect = [sites_resp, empty_resp]
+
+        client = UnifiClient('unifi.local', 'key')
+
+        self.assertEqual([], client.records())
+
+    @patch('octodns_unifi.Session')
+    def test_records_bare_list_body(self, mock_session_cls):
+        mock_sess = MagicMock()
+        mock_session_cls.return_value = mock_sess
+
+        sites_resp = Mock()
+        sites_resp.status_code = 200
+        sites_resp.json.return_value = SITES_RESPONSE
+
+        # an unenveloped body is handed back as-is, same as _request does
+        bare_resp = Mock()
+        bare_resp.status_code = 200
+        bare_resp.json.return_value = [{'id': 'a'}]
+
+        mock_sess.request.side_effect = [sites_resp, bare_resp]
+
+        client = UnifiClient('unifi.local', 'key')
+
+        self.assertEqual([{'id': 'a'}], client.records())
+
+    @patch('octodns_unifi.Session')
+    def test_resolve_site_walks_every_page(self, mock_session_cls):
+        mock_sess = MagicMock()
+        mock_session_cls.return_value = mock_sess
+
+        # the wanted site only shows up on the second page
+        mock_sess.request.side_effect = [
+            self._page([{'id': 'site-uuid-1', 'name': 'first'}], 2),
+            self._page([{'id': 'site-uuid-2', 'name': 'wanted'}], 2),
+        ]
+
+        client = UnifiClient('unifi.local', 'key', site='wanted')
+        client._resolve_site()
+
+        self.assertEqual('site-uuid-2', client._site_id)
+
 
 class TestUnifiProvider(TestCase):
     def _get_provider(self):

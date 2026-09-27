@@ -20,6 +20,8 @@ _HOST_FORBIDDEN_RE = re_compile(r'[\x00\s/\\?#@%]')
 # \A/\Z (not ^/$) so a trailing newline can't slip past the anchor. Length is
 # bounded so a hostile or buggy id can't produce an oversized URL.
 _SAFE_ID_RE = re_compile(r'\A[A-Za-z0-9][A-Za-z0-9._:-]{0,254}\Z')
+# Largest page the integration API will serve; it defaults to 25
+_PAGE_LIMIT = 200
 
 
 class UnifiClientException(Exception):
@@ -74,7 +76,7 @@ class UnifiClient:
         if self._site_id:
             return
 
-        resp = self._request('GET', '/integration/v1/sites')
+        resp = self._request_paged('/integration/v1/sites')
         for s in resp or []:
             site_id = s.get('id')
             if site_id and s.get('name', '').lower() == self._site_name.lower():
@@ -93,12 +95,14 @@ class UnifiClient:
             '_resolve_site: name=%s, id=%s', self._site_name, self._site_id
         )
 
-    def _request(self, method, path, data=None):
+    def _request_raw(self, method, path, data=None, params=None):
         url = f'{self._base}{path}'
         self.log.debug('_request: method=%s, url=%s', method, url)
 
         try:
-            resp = self._sess.request(method, url, json=data, timeout=30)
+            resp = self._sess.request(
+                method, url, json=data, params=params, timeout=30
+            )
         except RequestException as e:
             raise UnifiClientException(
                 f'Request failed: {method} {url}: {type(e).__name__}'
@@ -114,18 +118,43 @@ class UnifiClient:
             return None
 
         try:
-            body = resp.json()
+            return resp.json()
         except ValueError as e:
             raise UnifiClientException(
                 f'Invalid JSON response: {type(e).__name__}'
             ) from e
+
+    def _request(self, method, path, data=None):
+        body = self._request_raw(method, path, data)
         if isinstance(body, dict):
             return body.get('data', body)
         return body
 
+    def _request_paged(self, path):
+        # Collection endpoints wrap their results in an
+        # {offset, limit, count, totalCount, data} envelope and default limit
+        # to 25, so a single GET silently truncates larger sites. limit is
+        # capped at 200 by the controller, hence the walk.
+        items = []
+        offset = 0
+        while True:
+            body = self._request_raw(
+                'GET', path, params={'offset': offset, 'limit': _PAGE_LIMIT}
+            )
+            if not isinstance(body, dict):
+                return items if body is None else body
+            page = body.get('data') or []
+            items.extend(page)
+            total = body.get('totalCount')
+            # advance by what we actually got rather than the advertised
+            # count so a controller that over-reports can't spin us forever
+            if not page or total is None or offset + len(page) >= total:
+                return items
+            offset += len(page)
+
     def records(self):
         self._resolve_site()
-        return self._request('GET', self._dns_path)
+        return self._request_paged(self._dns_path)
 
     def record_create(self, data):
         self._resolve_site()
