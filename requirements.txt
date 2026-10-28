@@ -2,7 +2,7 @@
 x-python-version-not-supported; python_version!='3.11' and python_version!='3.12' and python_version!='3.13' and python_version!='3.14'
 anyio==4.15.1
 backports-tarfile==1.2.0; python_version=='3.11'
-black==26.5.1
+black==26.10.1
 build==1.6.1
 certifi==2026.7.22
 cffi==2.1.1
