@@ -11,7 +11,7 @@ charset-normalizer==3.5.1
 click==8.5.0
 coverage==7.16.2
 cryptography==50.0.1
-dnspython==2.8.0
+dnspython==2.9.0
 docutils==0.23
 fqdn==1.6.0
 h11==0.16.0
