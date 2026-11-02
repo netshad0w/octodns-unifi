@@ -31,7 +31,7 @@ keyring==25.7.0
 markdown-it-py==4.2.0
 mdurl==0.1.2
 more-itertools==11.1.0
-msgpack==1.2.2
+msgpack==1.2.3
 mypy-extensions==1.1.0
 natsort==8.4.0
 nh3==0.3.7
