@@ -1,3 +1,10 @@
+## 1.2.1 - 2026-11-10
+
+Patch:
+* Walk every page of the UniFi integration API's paginated collection endpoints; sites with more than 25 DNS records were silently truncated to the first page, producing incomplete plans and duplicate creates
+* Refresh pinned dev/build requirements (octodns 1.22.0, cryptography 50.0.0, setuptools 84.0.0, twine 7.0.0) and lift the docutils/typing-extensions caps now that their stable releases are out
+* Refresh pinned dev/build requirements again (cryptography 50.0.2, setuptools 84.2.1, python-dateutil 3.0.0) and raise the build-system floor to setuptools>=84.2.1
+
 ## 1.2.0 - 2026-06-30
 
 Minor:
